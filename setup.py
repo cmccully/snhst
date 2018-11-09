@@ -7,7 +7,7 @@ setup(name='snhst',
       packages=['snhst'],
       setup_requires=[],
       install_requires=['numpy', 'astropy', 'matplotlib', 'drizzlepac', 'astroscrappy', 'reproject',
-                        'scipy', 'crds'],
+                        'scipy', 'crds', 'sep'],
       tests_require=[],
       scripts=[]
       )

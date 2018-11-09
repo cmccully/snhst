@@ -1,15 +1,8 @@
-import shutil
-import os
 from astropy.io import fits
 
 
 def is_sci_extension(hdu):
     return 'EXTNAME' in hdu.header and hdu.header['EXTNAME'].upper() == 'SCI'
-
-
-def copy_if_not_exists(filename, path):
-    if not os.path.exists(os.path.join(path, filename)):
-        shutil.copy(filename, path)
 
 
 def get_instrument(filename):
@@ -20,9 +13,17 @@ def get_instrument(filename):
         subarray = 'full'
     else:
         detector = hdu[0].header['DETECTOR'].lower()
-        if hdu[0].header['SUBARRAY'].upper() == 'T':
+        if hdu[0].header['SUBARRAY']:
             subarray = "sub"
         else:
             subarray = "full"
     return "{instrument}_{detector}_{subarray}".format(instrument=instrument, detector=detector,
                                                        subarray=subarray)
+
+
+def get_data_extension(filename):
+    """Get the science hdu of an image (may be compressed)"""
+    reference_hdulist = fits.open(filename)
+    for reference_hdu in reference_hdulist:
+        if reference_hdu.header.get('NAXIS'):
+            return reference_hdu

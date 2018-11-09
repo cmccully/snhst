@@ -1,71 +1,66 @@
 import numpy as np
-from astropy import coordinates, units
+from astropy import coordinates
 from astropy import table
-from astropy import wcs
+from astropy.io import fits
 from scipy import optimize
+import logging
 
-from snhst.dolphot import cut_bad_dolphot_sources
 
-
-def calculate_wcs_offset(input_image, input_catalog, reference_image, reference_catalog,
-                         n_stars=120, max_offset=0.1, origin=1):
-    # Read in the reference catalog and the input catalog x's, y's
-    catalog = read_catalog(reference_image, reference_catalog)
-    # Convert the reference x and y's into ra and dec
-    catalog['ra'], catalog['dec'] = wcs.WCS(reference_image).all_pix2world(catalog['x'], catalog['y'], origin)
-
-    input_catalog = read_catalog(input_image, input_catalog)
-    input_wcs = wcs.WCS(input_image)
-    input_catalog['ra'], input_catalog['dec'] = input_wcs.all_pix2world(input_catalog['x'], input_catalog['y'], origin)
+def calculate_wcs_offset(hst_table, ref_table, n_stars=120, max_offset=0.1):
 
     # Choose the brightest objects that overlap both images (always assume the reference image
-    # is larger than the input image
-    in_input_image = coords_inside_image(input_wcs, catalog)
-    catalog = catalog[in_input_image].sorted('mag', desc=True)[:n_stars]
+    # and the HST image have the same WCS and are the same shape)
+    ref_table.sort('mag')
+    ref_table = ref_table[:n_stars]
 
-    input_catalog = input_catalog.sorted('mag', desc=True)[:n_stars]
+    hst_table.sort('mag')
+    hst_table = hst_table[:n_stars]
 
     # Match the brighest objects between frames (the closest thing within ~0.1 arcsec)
-    input_skycoords = coordinates.SkyCoord(input_catalog['ra'], input_catalog['dec'])
-    ref_skycoords = coordinates.SkyCoord(catalog['ra'], catalog['dec'])
+    hst_skycoords = coordinates.SkyCoord(hst_table['ra'], hst_table['dec'], unit=('deg', 'deg'))
+    ref_skycoords = coordinates.SkyCoord(ref_table['ra'], ref_table['dec'], unit=('deg', 'deg'))
 
-    match_id, separations, _ = input_skycoords.match_to_catalog_sky(ref_skycoords)
-    catalog = catalog[match_id][separations.to(units.arcsec) < max_offset]
-    input_catalog = input_catalog[separations.to(units.arcsec) < max_offset]
+    match_id, separations, _ = hst_skycoords.match_to_catalog_sky(ref_skycoords)
+    ref_table = ref_table[match_id][separations.arcsec < max_offset]
+    hst_table = hst_table[separations.arcsec < max_offset]
+    if not np.any(separations.arcsec < max_offset):
+        logging.error('no matches found within {:.2} arcsec'.format(max_offset))
+        return 0, 0
 
-    # set the initial guess to be what is already in the header of the input catalog
-    results = optimize.minimize(wcs_objective, [0, 0], args=(input_catalog, catalog), method='Nelder-Mead')
+    # set the initial guess to be what is already in the header of the HST image
+    results = optimize.minimize(wcs_objective, [0, 0], args=(hst_table, ref_table), method='Nelder-Mead')
     return results['x']
 
 
-def wcs_objective(offset, input_catalog, reference_catalog):
+def wcs_objective(offset, hst_table, reference_catalog):
     ra_offset, dec_offset = offset
-    offset_skycoords = coordinates.SkyCoord(input_catalog['ra'] + ra_offset, input_catalog['dec'] + dec_offset)
-    ref_skycoords = coordinates.SkyCoord(reference_catalog['ra'], reference_catalog['dec'])
+    offset_skycoords = coordinates.SkyCoord(hst_table['ra'] + ra_offset, 
+                                            hst_table['dec'] + dec_offset, unit=('deg', 'deg'))
+    ref_skycoords = coordinates.SkyCoord(reference_catalog['ra'], reference_catalog['dec'], unit=('deg', 'deg'))
     _, separations, _ = offset_skycoords.match_to_catalog_sky(ref_skycoords)
     # Minimize the mean offset between all of the matched sources
-    return np.mean(separations.to(units.arcsec))
-
-
-def coords_inside_image(input_wcs, catalog, origin=1):
-    xs, ys = input_wcs.all_world2pix(catalog['ra'], catalog['dec'], origin)
-    in_image = np.logical_and(xs > 0, ys > 0)
-    in_image = np.logical_and(in_image, xs < input_wcs.naxis1)
-    in_image = np.logical_and(in_image, ys < input_wcs.naxis2)
-    return in_image
+    return np.mean(separations.arcsec)
 
 
 def read_catalog(catalog_filename):
-    return ascii.read(catalog_filename, format='fast_no_header', names=['x', 'y', 'mag', 'magerr'])
+    return table.Table.read(catalog_filename, format='ascii.fast_no_header', names=['x', 'y', 'mag', 'magerr'])
 
 
-def parse_dolphot_table(input_catalog, drzfile, output_catalog):
-    dolphot_catalog = ascii.read(input_catalog, format='fast_no_header')
+def apply_offsets(images, offset):
+    """Update the raw hst frames with the calculated offset"""
+    for image in images:
+        hdulist = fits.open(image)
+        for hdu in hdulist:
+            hdr = hdu.header
+            if hdr.get('EXTNAME') == 'SCI':
+                hdr['CRVAL1'] += offset[0]
+                hdr['CRVAL2'] += offset[1]
+        hdulist.writeto(image, overwrite=True)
+        logging.info('offset {} by {:.6f}, {:.6f} deg'.format(image, offset[0], offset[1]))
 
-    dolphot_catalog = cut_bad_dolphot_sources(dolphot_catalog)
-    t = table.Table()
-    t['x'] = dolphot_catalog['col3'] + 0.5
-    t['y'] = dolphot_catalog['col4'] + 0.5
-    t['mag'] = dolphot_catalog['col17']
-    t['magerr'] = dolphot_catalog['col19']
-    t.writeto(output_catalog, format='fast_no_header', overwrite=True)
+
+def offset_to_match(images, hst_table, ref_table, n_stars=120, max_offset=0.1):
+
+    offsets = calculate_wcs_offset(hst_table, ref_table, n_stars, max_offset)
+
+    apply_offsets(images, offsets)
