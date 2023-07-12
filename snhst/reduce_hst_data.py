@@ -297,7 +297,7 @@ def sort_raw_data(images, min_visit_separation=0.2):
     metadata['filename'] = images
     metadata['expstart'] = [fits.getval(image, 'EXPSTART') for image in images]
     metadata['instrument'] = [fits_utils.get_instrument(image) for image in images]
-    metadata['visit'] = 'visit1'  # initialize the column
+    metadata['visit'] = ['visit1' for image in images]  # initialize the column
     metadata['filter'] = [get_filter_name(image) for image in images]
     metadata.sort('expstart')
     visit_starts, = np.where(np.diff(metadata['expstart']) > min_visit_separation)

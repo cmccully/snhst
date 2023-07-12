@@ -16,7 +16,7 @@ def detect_cosmic_rays(filename, options, output_image=None, masked_value=None):
             if masked_value is not None:
                 mask = hdu.data == masked_value
             else:
-                mask = np.zeros(hdu.data.shape, dtype=np.bool)
+                mask = np.zeros(hdu.data.shape, dtype=bool)
 
             _crmask, crclean = detect_cosmics(hdu.data.copy().astype('<f4'), inmask=mask,
                                               readnoise=options['rdnoise'], gain=options['gain'],

@@ -153,7 +153,7 @@ instrument_defaults = {
             'RSky2': '3 6',
             },
         },
-    'acs_wcs_full': {
+    'acs_wfc_full': {
         'input_files': '*_flc.fits',
         'drizzle': {
             'rot': 0.,
@@ -183,7 +183,7 @@ instrument_defaults = {
             'RSky2': '3 6',
             },
         },
-    'acs_wcs_sub': {
+    'acs_wfc_sub': {
         'input_files': '*_flt.fits',
         'drizzle': {
             'rot': 0.,
