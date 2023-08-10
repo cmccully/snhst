@@ -7,6 +7,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import table
 from astropy import nddata
+import stwcs
 
 from snhst import drizzle, dolphot, wcs, fits_utils, utils, parameters
 import reproject
@@ -210,10 +211,12 @@ def remove_images_without_object(ra, dec, images):
 def image_includes_coordinate(image, ra, dec):
     image_hdu = fits.open(image)
     coordinate_in_image = False
-    for hdu in image_hdu:
+    for i, hdu in enumerate(image_hdu):
         if hdu.header.get('EXTNAME') == 'SCI':
-            image_wcs = WCS(hdu.header)
-
+            try:
+                image_wcs = WCS(hdu)
+            except:
+                image_wcs = stwcs.wcsutil.HSTWCS(image_hdu, i)
             # Use zero indexed here for the pixel coordinates
             coordinate_in_pixels = image_wcs.all_world2pix([[ra, dec]], 0)
             coordinate_not_negative = np.all(coordinate_in_pixels > 0)

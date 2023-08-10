@@ -17,7 +17,7 @@ def run_tweakreg(images, options):
             # Remove cosmic rays, this operates on the files in place
             detect_cosmic_rays(image, options['crpars'])
 
-    tweakreg.TweakReg(files=images, refimage=options['refimage'],
+    tweakreg.TweakReg(files=images, refimage=options.get('refimage'),
                       interactive=False, writecat=False, clean=True, updatehdr=True,
                       wcsname='TWEAK', reusename=True, rfluxunits='counts', see2dplot=False,
                       separation=0.5, residplot="No plot", runfile='',

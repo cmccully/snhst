@@ -12,6 +12,7 @@ from snhst import reduce_hst_data
 from snhst import wcs
 from astropy.wcs import WCS
 import re
+import stwcs
 
 
 def dolphot(template_image, images, path, options):
@@ -93,10 +94,15 @@ def get_overlapping_split_images(template_image, images):
     template_hdu = fits.open(template_image)
     for image in images:
         split_images = glob(image.replace('.fits', '.chip?.fits'))
+        extensions_per_chip = {1: 1, 2: 4}
         for split_image in split_images:
-            header = fits.getheader(split_image)
+            # strip off the .fits to get the chip number
+            chip = int(split_image[-6])
+            # Because of HST's new wcs convention we have to open a different file to get the wcs
+            image_hdu = fits.open(image.replace('dolphot/', ''))
+            image_wcs = stwcs.wcsutil.HSTWCS(image_hdu, extensions_per_chip[chip])
             # remap the template_image onto the image
-            _, footprint = reproject_interp(template_hdu, header)
+            _, footprint = reproject_interp(template_hdu, image_wcs)
             # If the overlap is at least 10%, consider the image to be overlapping
             if (footprint > 0).sum() >= (0.1 * footprint.size):
                 overlapping_images.append(split_image)
