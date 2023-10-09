@@ -129,7 +129,12 @@ def run_dolphot(template_image, images, path, options):
     for i, image in enumerate(images):
         write_dolphot_image_parameters(f, image, i, options.get('dolphot_img', {}))
     f.close()
-    os.system('dolphot {0}/dp.out -p{0}/dp.params 2>&1 | tee -a {0}/dp.log'.format(path))
+    print(f'Running dolphot in {path}.')
+    cmd = 'dolphot {0}/dp.out -p{0}/dp.params 2>&1 | tee -a {0}/dp.log'.format(path)
+    print(f'{cmd}')
+    dolphot_status = os.system(cmd)
+    if dolphot_status:
+        raise RuntimeError('Dolphot failed with status {}'.format(dolphot_status))
 
 
 def cut_bad_dolphot_sources(catalog):
